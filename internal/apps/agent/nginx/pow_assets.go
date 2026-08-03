@@ -2,7 +2,7 @@ package nginx
 
 import (
 	"embed"
-	"path/filepath"
+	"path"
 	"strings"
 
 	"github.com/Rain-kl/Wavelet/internal/apps/agent/protocol"
@@ -649,7 +649,7 @@ func ManagedPowStaticFiles() ([]protocol.SupportFile, error) {
 			return err
 		}
 		for _, entry := range entries {
-			fullPath := filepath.Join(dir, entry.Name())
+			fullPath := path.Join(dir, entry.Name())
 			if entry.IsDir() {
 				if err := walk(fullPath); err != nil {
 					return err
@@ -670,7 +670,7 @@ func ManagedPowStaticFiles() ([]protocol.SupportFile, error) {
 		return nil
 	}
 	for _, entry := range entries {
-		fullPath := filepath.Join("pow_static", entry.Name())
+		fullPath := path.Join("pow_static", entry.Name())
 		if entry.IsDir() {
 			if err := walk(fullPath); err != nil {
 				return nil, err
