@@ -21,7 +21,7 @@ RUN apk add --no-cache bash curl \
     && bash scripts/fetch-agent-geoip-mmdb.sh
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    go build -trimpath -ldflags "-s -w -X 'github.com/Rain-kl/Wavelet/internal/apps/agent/config.Version=$VERSION'" -o /build/bin/openflare-agent ./cmd/agent/main.go
+    go build -trimpath -ldflags "-s -w -X 'github.com/Rain-kl/Wavelet/internal/apps/agent/config.Version=$VERSION'" -o /build/bin/openflare-agent ./cmd/agent
 
 FROM openresty/openresty:alpine
 

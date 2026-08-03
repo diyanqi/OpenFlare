@@ -31,6 +31,10 @@ sidebar: false
 
 - 支持在 Windows Server 上以原生 Agent 可执行文件运行，并通过 PowerShell 一键安装、注册自动启动服务和校验下载完整性。
 
+### 修复
+
+- 修复 Agent Docker 镜像仍按单文件入口构建、遗漏平台服务入口导致构建失败的问题。
+
 
 ## [v3.4.3] - 2026-07-24
 
