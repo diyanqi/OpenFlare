@@ -3,8 +3,10 @@ package wsclient
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
@@ -19,7 +21,10 @@ import (
 const (
 	writeDeadlineSecs       = 5
 	defaultReadDeadlineSecs = 75
+	wsPayloadPreviewBytes   = 64
 )
+
+var errEmptyWebSocketMessage = errors.New("websocket message is empty")
 
 // Config holds the configuration for a WebSocket client connection.
 type Config struct {
@@ -171,7 +176,8 @@ func (conn *Connection) Receive(target any) error {
 	if conn.ReadTimeout > 0 {
 		_ = conn.Conn.SetReadDeadline(time.Now().Add(conn.ReadTimeout))
 	}
-	err := websocket.JSON.Receive(conn.Conn, target)
+	var data []byte
+	err := websocket.Message.Receive(conn.Conn, &data)
 	if err != nil {
 		var netErr net.Error
 		if errors.As(err, &netErr) && netErr.Timeout() {
@@ -179,7 +185,33 @@ func (conn *Connection) Receive(target any) error {
 		}
 		return err
 	}
+	if len(data) == 0 {
+		slog.Warn("ws received empty message")
+		return errEmptyWebSocketMessage
+	}
+	if err := decodeWebSocketMessage(data, target); err != nil {
+		slog.Warn("ws received invalid json",
+			"payload_bytes", len(data),
+			"payload_prefix_hex", websocketPayloadPreview(data),
+			"error", err,
+		)
+		return fmt.Errorf("decode websocket message: %w", err)
+	}
 	return nil
+}
+
+func decodeWebSocketMessage(data []byte, target any) error {
+	if len(data) == 0 {
+		return errEmptyWebSocketMessage
+	}
+	return json.Unmarshal(data, target)
+}
+
+func websocketPayloadPreview(data []byte) string {
+	if len(data) > wsPayloadPreviewBytes {
+		data = data[:wsPayloadPreviewBytes]
+	}
+	return hex.EncodeToString(data)
 }
 
 func websocketReadTimeout(requestTimeout time.Duration) time.Duration {

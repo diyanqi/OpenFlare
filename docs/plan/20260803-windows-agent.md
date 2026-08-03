@@ -47,4 +47,5 @@
 ## 5. 当前验证记录
 
 * 已通过：Windows 观测包 `go test` / `go vet`、Go 格式检查、`git diff --check`、Release Workflow YAML 解析、Linux 安装脚本 `bash -n` 以及本次前端文件的 Biome 检查。
+* 追加：WebSocket 收发链路已增加消息字节数、空消息和非法 JSON 的可见诊断，并保留配置应用错误与连接关闭的独立记录。
 * 未完成：本机没有 PowerShell，无法运行 `.ps1` Parser；`make format` 需要联网安装缺失的 `goimports`，`make code-check` 需要本机未安装的 `rg` 与 `golangci-lint`；Windows Agent 交叉构建因 Go 模块缓存不完整且网络下载超时未能完成。

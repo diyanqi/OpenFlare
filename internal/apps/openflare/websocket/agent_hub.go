@@ -205,7 +205,7 @@ func (c *agentClient) readPump() {
 			Payload json.RawMessage `json:"payload,omitempty"`
 		}
 		if err = json.Unmarshal(data, &inbound); err != nil {
-			slog.Debug("agent ws invalid message", "node_id", c.nodeID, "error", err)
+			slog.Warn("agent ws invalid message", "node_id", c.nodeID, "message_bytes", len(data), "error", err)
 			continue
 		}
 
@@ -242,10 +242,19 @@ func (c *agentClient) writePump() {
 			return
 		case message := <-c.send:
 			_ = c.conn.SetWriteDeadline(time.Now().Add(wsWriteDeadline))
-			if err := c.conn.WriteJSON(message); err != nil {
-				slog.Warn("agent ws write failed", "node_id", c.nodeID, "error", err)
+			data, err := json.Marshal(message)
+			if err != nil {
+				slog.Warn("agent ws message encode failed", "node_id", c.nodeID, "message_type", message.Type, "error", err)
 				c.close()
 				return
+			}
+			if err := c.conn.WriteMessage(websocket.TextMessage, data); err != nil {
+				slog.Warn("agent ws write failed", "node_id", c.nodeID, "message_type", message.Type, "message_bytes", len(data), "error", err)
+				c.close()
+				return
+			}
+			if message.Type != messageTypePing && message.Type != messageTypePong {
+				slog.Info("agent ws message sent", "node_id", c.nodeID, "message_type", message.Type, "message_bytes", len(data))
 			}
 		case <-ticker.C:
 			select {

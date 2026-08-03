@@ -38,6 +38,7 @@ sidebar: false
 - 修复 Windows Agent 应用配置时带引号的路径占位符未被替换，以及 OpenResty 首次启动阻塞 Agent 心跳的问题。
 - 修复 Windows Agent 应用旧配置模板时仍使用 `./logs` 相对日志路径，导致 OpenResty 配置校验失败的问题。
 - 修复 Agent WebSocket 短连接反复按最短间隔重连造成的连接抖动，并补充 Server 端可见的连接关闭日志。
+- 增强 Agent 与 Server 的 WebSocket 消息诊断，明确记录空消息、非法 JSON、消息字节数和发送失败，便于区分连接异常与配置应用失败。
 
 
 ## [v3.4.3] - 2026-07-24
