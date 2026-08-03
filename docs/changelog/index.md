@@ -35,6 +35,7 @@ sidebar: false
 
 - 修复 Agent Docker 镜像仍按单文件入口构建、遗漏平台服务入口导致构建失败的问题。
 - 修复 Windows Agent 遍历内嵌 PoW 静态资源时使用本地反斜杠路径，导致服务启动失败的问题。
+- 修复 Windows Agent 应用配置时带引号的路径占位符未被替换，以及 OpenResty 首次启动阻塞 Agent 心跳的问题。
 
 
 ## [v3.4.3] - 2026-07-24

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"log/slog"
 	"net"
@@ -78,6 +79,11 @@ type CommandRunner interface {
 	Run(ctx context.Context, name string, args ...string) ([]byte, error)
 }
 
+// CommandStarter starts a long-running process without waiting for it to exit.
+type CommandStarter interface {
+	Start(ctx context.Context, name string, args ...string) error
+}
+
 // OSCommandRunner runs commands using the host operating system.
 type OSCommandRunner struct{}
 
@@ -108,6 +114,20 @@ func (r *OSCommandRunner) Run(ctx context.Context, name string, args ...string) 
 	return output, runErr
 }
 
+// Start launches a long-running process and returns after the process is created.
+func (r *OSCommandRunner) Start(ctx context.Context, name string, args ...string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	cmd := exec.Command(name, args...) //nolint:gosec // command name and args come from trusted OpenResty management paths
+	cmd.Stdout = io.Discard
+	cmd.Stderr = io.Discard
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	return cmd.Process.Release()
+}
+
 // PathExecutor runs OpenResty using a configured binary and config path.
 type PathExecutor struct {
 	Path       string
@@ -133,7 +153,7 @@ func (e *PathExecutor) Reload(ctx context.Context) error {
 	if err != nil {
 		if isOpenrestyNotRunningError(string(output)) {
 			slog.Warn("openresty reload reported runtime is not running, starting binary", "path", e.Path)
-			startOutput, startErr := e.Runner.Run(ctx, e.Path, "-c", e.ConfigPath)
+			startOutput, startErr := e.start(ctx)
 			if startErr != nil {
 				return fmt.Errorf("openresty reload failed: %w: %s; start failed: %v: %s", err, string(output), startErr, string(startOutput))
 			}
@@ -168,12 +188,21 @@ func (e *PathExecutor) Restart(ctx context.Context) error {
 			return fmt.Errorf("openresty stop failed: %w: %s", err, text)
 		}
 	}
-	output, err = e.Runner.Run(ctx, e.Path, "-c", e.ConfigPath)
+	output, err = e.start(ctx)
 	if err != nil {
 		return fmt.Errorf("openresty start failed: %w: %s", err, string(output))
 	}
 	slog.Info("openresty restart succeeded with binary", "path", e.Path)
 	return nil
+}
+
+func (e *PathExecutor) start(ctx context.Context) ([]byte, error) {
+	if runtime.GOOS == "windows" {
+		if starter, ok := e.Runner.(CommandStarter); ok {
+			return nil, starter.Start(ctx, e.Path, "-c", e.ConfigPath)
+		}
+	}
+	return e.Runner.Run(ctx, e.Path, "-c", e.ConfigPath)
 }
 
 // Manager applies OpenResty configuration and manages runtime assets.
@@ -1494,7 +1523,7 @@ func replaceNginxPathPlaceholder(content, placeholder, path string, quotePaths b
 		index := cursor + relativeIndex
 		builder.WriteString(content[cursor:index])
 		if index > 0 && content[index-1] == '"' {
-			builder.WriteString(placeholder)
+			builder.WriteString(strings.ReplaceAll(path, `\`, `/`))
 			cursor = index + len(placeholder)
 			continue
 		}
