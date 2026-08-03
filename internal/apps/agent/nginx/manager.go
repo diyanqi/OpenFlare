@@ -17,6 +17,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -498,18 +499,18 @@ func (m *Manager) CurrentChecksum() (string, error) {
 	}
 	normalizedMain := string(mainData)
 	if includePath := m.routeConfigIncludePath(); includePath != "" {
-		normalizedMain = strings.ReplaceAll(normalizedMain, includePath, openrestyrender.RouteConfigPlaceholder)
+		normalizedMain = normalizeNginxPath(normalizedMain, includePath, openrestyrender.RouteConfigPlaceholder)
 	}
 	if accessLogPath := m.accessLogRuntimePath(); accessLogPath != "" {
-		normalizedMain = strings.ReplaceAll(normalizedMain, accessLogPath, openrestyrender.AccessLogPlaceholder)
+		normalizedMain = normalizeNginxPath(normalizedMain, accessLogPath, openrestyrender.AccessLogPlaceholder)
 		errorLogPath := filepath.Join(filepath.Dir(accessLogPath), "error.log")
-		normalizedMain = strings.ReplaceAll(normalizedMain, filepath.ToSlash(errorLogPath), openrestyrender.ErrorLogPlaceholder)
+		normalizedMain = normalizeNginxPath(normalizedMain, errorLogPath, openrestyrender.ErrorLogPlaceholder)
 	}
 	if pidPath := m.pidRuntimePath(); pidPath != "" {
-		normalizedMain = strings.ReplaceAll(normalizedMain, filepath.ToSlash(pidPath), openrestyrender.PIDPathPlaceholder)
+		normalizedMain = normalizeNginxPath(normalizedMain, pidPath, openrestyrender.PIDPathPlaceholder)
 	}
 	if luaDir := m.luaRuntimePath(); luaDir != "" {
-		normalizedMain = strings.ReplaceAll(normalizedMain, luaDir, openrestyrender.LuaDirPlaceholder)
+		normalizedMain = normalizeNginxPath(normalizedMain, luaDir, openrestyrender.LuaDirPlaceholder)
 	}
 	if listen := strings.TrimSpace(m.OpenrestyObservabilityListen); listen != "" {
 		normalizedMain = strings.ReplaceAll(normalizedMain, listen, openrestyrender.ObservabilityListenPlaceholder)
@@ -522,14 +523,14 @@ func (m *Manager) CurrentChecksum() (string, error) {
 	}
 	normalizedRoute := string(data)
 	if m.NginxCertDir != "" {
-		normalizedRoute = strings.ReplaceAll(normalizedRoute, m.NginxCertDir, openrestyrender.CertDirPlaceholder)
+		normalizedRoute = normalizeNginxPath(normalizedRoute, m.NginxCertDir, openrestyrender.CertDirPlaceholder)
 	}
 	if luaDir := m.luaRuntimePath(); luaDir != "" {
-		normalizedRoute = strings.ReplaceAll(normalizedRoute, luaDir+"/pow/static", openrestyrender.PowStaticDirPlaceholder)
-		normalizedRoute = strings.ReplaceAll(normalizedRoute, luaDir, openrestyrender.LuaDirPlaceholder)
+		normalizedRoute = normalizeNginxPath(normalizedRoute, luaDir+"/pow/static", openrestyrender.PowStaticDirPlaceholder)
+		normalizedRoute = normalizeNginxPath(normalizedRoute, luaDir, openrestyrender.LuaDirPlaceholder)
 	}
 	if pagesDir := m.pagesRuntimePath(); pagesDir != "" {
-		normalizedRoute = strings.ReplaceAll(normalizedRoute, pagesDir, openrestyrender.PagesDirPlaceholder)
+		normalizedRoute = normalizeNginxPath(normalizedRoute, pagesDir, openrestyrender.PagesDirPlaceholder)
 	}
 	files, err := m.readManagedSupportFiles()
 	if err != nil {
@@ -1373,44 +1374,50 @@ func (m *Manager) ensureMimeTypes() error {
 
 func (m *Manager) renderRouteConfig(content string) string {
 	rendered := content
-	if m.NginxCertDir != "" {
-		rendered = strings.ReplaceAll(rendered, openrestyrender.CertDirPlaceholder, m.NginxCertDir)
-	}
+	rendered = replaceNginxPathPlaceholder(rendered, openrestyrender.CertDirPlaceholder, m.NginxCertDir, runtime.GOOS == "windows")
 	if luaDir := m.luaRuntimePath(); luaDir != "" {
-		rendered = strings.ReplaceAll(rendered, openrestyrender.LuaDirPlaceholder, luaDir)
-		rendered = strings.ReplaceAll(rendered, openrestyrender.PowStaticDirPlaceholder, luaDir+"/pow/static")
+		rendered = replaceNginxPathPlaceholder(rendered, openrestyrender.LuaDirPlaceholder, luaDir, runtime.GOOS == "windows")
+		rendered = replaceNginxPathPlaceholder(rendered, openrestyrender.PowStaticDirPlaceholder, luaDir+"/pow/static", runtime.GOOS == "windows")
 	}
 	if pagesDir := m.pagesRuntimePath(); pagesDir != "" {
-		rendered = strings.ReplaceAll(rendered, openrestyrender.PagesDirPlaceholder, pagesDir)
+		rendered = replaceNginxPathPlaceholder(rendered, openrestyrender.PagesDirPlaceholder, pagesDir, runtime.GOOS == "windows")
+	}
+	if runtime.GOOS == "windows" {
+		rendered = normalizeWindowsOpenRestyConfig(rendered)
 	}
 	return rendered
 }
 
 func (m *Manager) renderMainConfig(content string) string {
 	rendered := content
+	if runtime.GOOS == "windows" {
+		userDirective := regexp.MustCompile(`(?m)^[ \t]*user[ \t]+` + regexp.QuoteMeta(runtimeuser.Name) + `[ \t]*;[ \t]*(?:\r?\n|$)`)
+		rendered = userDirective.ReplaceAllString(rendered, "")
+	}
 	if includePath := m.routeConfigIncludePath(); includePath != "" {
-		rendered = strings.ReplaceAll(rendered, openrestyrender.RouteConfigPlaceholder, includePath)
+		rendered = replaceNginxPathPlaceholder(rendered, openrestyrender.RouteConfigPlaceholder, includePath, runtime.GOOS == "windows")
 	}
 	if accessLogPath := m.accessLogRuntimePath(); accessLogPath != "" {
-		rendered = strings.ReplaceAll(rendered, openrestyrender.AccessLogPlaceholder, accessLogPath)
+		rendered = replaceNginxPathPlaceholder(rendered, openrestyrender.AccessLogPlaceholder, accessLogPath, runtime.GOOS == "windows")
 		errorLogPath := filepath.Join(filepath.Dir(accessLogPath), "error.log")
-		rendered = strings.ReplaceAll(rendered, openrestyrender.ErrorLogPlaceholder, filepath.ToSlash(errorLogPath))
+		rendered = replaceNginxPathPlaceholder(rendered, openrestyrender.ErrorLogPlaceholder, errorLogPath, runtime.GOOS == "windows")
 	}
 	if pidPath := m.pidRuntimePath(); pidPath != "" {
 		slashPIDPath := filepath.ToSlash(pidPath)
-		rendered = strings.ReplaceAll(rendered, openrestyrender.PIDPathPlaceholder, slashPIDPath)
-		rendered = strings.ReplaceAll(rendered, "pid logs/nginx.pid;", "pid "+slashPIDPath+";")
+		rendered = replaceNginxPathPlaceholder(rendered, openrestyrender.PIDPathPlaceholder, slashPIDPath, runtime.GOOS == "windows")
+		rendered = strings.ReplaceAll(rendered, "pid logs/nginx.pid;", "pid "+nginxConfigPath(slashPIDPath)+";")
 		if err := os.MkdirAll(filepath.Dir(pidPath), nginxDirPerm); err != nil {
 			slog.Warn("ensure nginx pid directory failed", "path", filepath.Dir(pidPath), "error", err)
 		}
 	}
 	if cacheDir := m.nginxCacheRuntimeDir(); cacheDir != "" {
 		slashCacheDir := filepath.ToSlash(cacheDir)
-		rendered = strings.ReplaceAll(rendered, openrestyrender.NginxCacheDirPlaceholder, slashCacheDir)
+		rendered = replaceNginxPathPlaceholder(rendered, openrestyrender.NginxCacheDirPlaceholder, slashCacheDir, runtime.GOOS == "windows")
 		if !strings.Contains(rendered, "client_body_temp_path") {
+			nginxCachePath := nginxConfigPath(slashCacheDir)
 			writablePaths := fmt.Sprintf(
 				"    client_body_temp_path %s/client_temp;\n    proxy_temp_path %s/proxy_temp;\n    fastcgi_temp_path %s/fastcgi_temp;\n    uwsgi_temp_path %s/uwsgi_temp;\n    scgi_temp_path %s/scgi_temp;\n",
-				slashCacheDir, slashCacheDir, slashCacheDir, slashCacheDir, slashCacheDir,
+				nginxCachePath, nginxCachePath, nginxCachePath, nginxCachePath, nginxCachePath,
 			)
 			rendered = strings.Replace(rendered, "http {", "http {\n"+writablePaths, 1)
 		}
@@ -1422,14 +1429,14 @@ func (m *Manager) renderMainConfig(content string) string {
 	}
 	if proxyCacheDir := m.proxyCacheRuntimeDir(); proxyCacheDir != "" {
 		slashProxyCache := filepath.ToSlash(proxyCacheDir)
-		rendered = strings.ReplaceAll(rendered, openrestyrender.ProxyCachePathPlaceholder, slashProxyCache)
-		rendered = strings.ReplaceAll(rendered, "/var/cache/openresty", slashProxyCache)
+		rendered = replaceNginxPathPlaceholder(rendered, openrestyrender.ProxyCachePathPlaceholder, slashProxyCache, runtime.GOOS == "windows")
+		rendered = strings.ReplaceAll(rendered, "/var/cache/openresty", nginxConfigPath(slashProxyCache))
 		if err := os.MkdirAll(proxyCacheDir, nginxDirPerm); err != nil {
 			slog.Warn("ensure proxy cache directory failed", "path", proxyCacheDir, "error", err)
 		}
 	}
 	if luaDir := m.luaRuntimePath(); luaDir != "" {
-		rendered = strings.ReplaceAll(rendered, openrestyrender.LuaDirPlaceholder, luaDir)
+		rendered = replaceNginxPathPlaceholder(rendered, openrestyrender.LuaDirPlaceholder, luaDir, runtime.GOOS == "windows")
 		if strings.Contains(rendered, "lua_shared_dict openflare_waf_config") {
 			rendered = injectWAFWorkerInit(rendered, luaDir)
 		}
@@ -1443,7 +1450,94 @@ func (m *Manager) renderMainConfig(content string) string {
 	if resolverDirective := strings.TrimSpace(m.OpenrestyResolverDirective); resolverDirective != "" {
 		rendered = strings.ReplaceAll(rendered, ResolverDirectivePlaceholder, resolverDirective)
 	}
+	if runtime.GOOS == "windows" {
+		rendered = normalizeWindowsOpenRestyConfig(rendered)
+	}
 	return rendered
+}
+
+func nginxConfigPath(path string) string {
+	path = filepath.ToSlash(strings.TrimSpace(path))
+	if runtime.GOOS != "windows" || path == "" {
+		return path
+	}
+	return windowsNginxConfigPath(path)
+}
+
+func windowsNginxConfigPath(path string) string {
+	path = strings.ReplaceAll(strings.TrimSpace(path), `\`, `/`)
+	if path == "" {
+		return path
+	}
+	escaped := strings.ReplaceAll(path, `\`, `\\`)
+	escaped = strings.ReplaceAll(escaped, `"`, `\"`)
+	return `"` + escaped + `"`
+}
+
+func replaceNginxPathPlaceholder(content, placeholder, path string, quotePaths bool) string {
+	path = filepath.ToSlash(strings.TrimSpace(path))
+	if placeholder == "" || path == "" {
+		return content
+	}
+	if !quotePaths {
+		return strings.ReplaceAll(content, placeholder, path)
+	}
+
+	var builder strings.Builder
+	cursor := 0
+	for cursor < len(content) {
+		relativeIndex := strings.Index(content[cursor:], placeholder)
+		if relativeIndex < 0 {
+			builder.WriteString(content[cursor:])
+			break
+		}
+		index := cursor + relativeIndex
+		builder.WriteString(content[cursor:index])
+		if index > 0 && content[index-1] == '"' {
+			builder.WriteString(placeholder)
+			cursor = index + len(placeholder)
+			continue
+		}
+		end := index + len(placeholder)
+		for end < len(content) && !strings.ContainsRune(" \t\r\n;\"", rune(content[end])) {
+			end++
+		}
+		builder.WriteString(windowsNginxConfigPath(path + content[index+len(placeholder):end]))
+		cursor = end
+	}
+	return builder.String()
+}
+
+func normalizeWindowsOpenRestyConfig(content string) string {
+	lines := strings.SplitAfter(content, "\n")
+	filtered := make([]string, 0, len(lines))
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		lower := strings.ToLower(trimmed)
+		if strings.HasPrefix(lower, "user ") ||
+			strings.HasPrefix(lower, "worker_rlimit_nofile ") ||
+			strings.HasPrefix(lower, "use ") ||
+			strings.HasPrefix(lower, "multi_accept ") ||
+			strings.Contains(lower, "reuseport") ||
+			strings.Contains(lower, " quic") ||
+			strings.HasPrefix(lower, "add_header alt-svc ") {
+			continue
+		}
+		filtered = append(filtered, line)
+	}
+	return strings.Join(filtered, "")
+}
+
+func normalizeNginxPath(content, path, placeholder string) string {
+	path = filepath.ToSlash(strings.TrimSpace(path))
+	if path == "" || placeholder == "" {
+		return content
+	}
+	if runtime.GOOS == "windows" {
+		content = strings.ReplaceAll(content, nginxConfigPath(path), placeholder)
+	}
+	content = strings.ReplaceAll(content, path, placeholder)
+	return content
 }
 
 func injectWAFWorkerInit(content string, luaDir string) string {
@@ -1559,7 +1653,7 @@ func RequiresRuntimeResolver(originURL string) bool {
 }
 
 func (m *Manager) routeConfigIncludePath() string {
-	return strings.TrimSpace(m.RouteConfigPath)
+	return filepath.ToSlash(strings.TrimSpace(m.RouteConfigPath))
 }
 
 func (m *Manager) accessLogRuntimePath() string {

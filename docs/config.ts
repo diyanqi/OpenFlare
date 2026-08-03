@@ -128,6 +128,7 @@ function sidebarDesign(): DefaultTheme.SidebarItem[] {
         { text: '系统架构', link: 'architecture' },
         { text: 'Zone 与域名资源设计', link: 'zone-design' },
         { text: 'Agent 与发布模型', link: 'agent-design' },
+        { text: 'Windows Server Agent', link: 'windows-agent-design' },
         { text: '内网穿透隧道设计', link: 'tunnel-design' },
         { text: 'WAF 设计', link: 'waf-design' },
         { text: 'WAF 可编排规则设计', link: 'waf-orchestration-design' },

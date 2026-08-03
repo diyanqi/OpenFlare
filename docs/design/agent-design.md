@@ -13,6 +13,8 @@
 3. **极强容灾与自愈能力**：由于网络抖动、磁盘写满或异常配置等因素极易导致配置同步失败，Agent 必须具备零依赖的本地回滚自愈能力，严防因单次配置失误导致整机服务彻底瘫痪。
 4. **纯粹的数据与状态落地**：Agent 仅负责承载 Server 渲染好的文件与控制意图落地，不包含复杂的业务逻辑校验、多端租户鉴权等控制面职责，确保了节点侧的高效与轻量。
 
+Agent 支持 Linux/macOS 前台运行和 Windows Server 原生运行。Windows 版本通过 Windows Service Control Manager 管理生命周期，使用 `agent.json` 保存配置，并使用 PowerShell 安装器完成 exe 下载、校验和服务注册；Windows 专属的路径、权限和主机观测约束见 [Windows Server Agent 设计](./windows-agent-design.md)。
+
 ---
 
 ## 核心功能

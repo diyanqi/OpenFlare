@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -66,6 +67,9 @@ func IsRuntimeUser() bool {
 // EnsureProcessUser drops from root to Name when possible so the agent writes
 // files with the same ownership OpenResty workers read.
 func EnsureProcessUser() error {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
 	account, err := Lookup()
 	if err != nil {
 		slog.Warn("runtime user unavailable, agent continues as current user", "user", Name, "euid", os.Geteuid(), "error", err)
@@ -89,6 +93,9 @@ func EnsureProcessUser() error {
 // EnsurePathOwnership makes root and its ancestors traversable, assigns runtime
 // ownership when running as root, and normalizes directory/file modes.
 func EnsurePathOwnership(root string, dirPerm os.FileMode, filePerm os.FileMode) error {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
 	root = filepath.Clean(strings.TrimSpace(root))
 	if root == "" || root == "." {
 		return nil

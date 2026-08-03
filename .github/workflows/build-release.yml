@@ -179,6 +179,9 @@ jobs:
           - goos: windows
             goarch: amd64
             archive: zip
+          - goos: windows
+            goarch: arm64
+            archive: zip
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -289,6 +292,12 @@ jobs:
           - goos: darwin
             goarch: arm64
             asset_name: openflare-agent-darwin-arm64
+          - goos: windows
+            goarch: amd64
+            asset_name: openflare-agent-windows-amd64.exe
+          - goos: windows
+            goarch: arm64
+            asset_name: openflare-agent-windows-arm64.exe
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -311,13 +320,16 @@ jobs:
         run: |
           go mod download
           mkdir -p dist
-          go build -trimpath -ldflags "-s -w -X 'github.com/Rain-kl/Wavelet/internal/apps/agent/config.Version=$VERSION'" -o "dist/$ASSET_NAME" ./cmd/agent/main.go
+          go build -trimpath -ldflags "-s -w -X 'github.com/Rain-kl/Wavelet/internal/apps/agent/config.Version=$VERSION'" -o "dist/$ASSET_NAME" ./cmd/agent
+          sha256sum "dist/$ASSET_NAME" | awk '{print $1 "  " $2}' > "dist/$ASSET_NAME.sha256"
 
       - name: Upload release artifact
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.create-release.outputs.version }}
-          files: dist/${{ matrix.asset_name }}
+          files: |
+            dist/${{ matrix.asset_name }}
+            dist/${{ matrix.asset_name }}.sha256
 
   build-relay-binaries:
     name: Build relay ${{ matrix.goos }}/${{ matrix.goarch }}

@@ -119,6 +119,9 @@ const relayInstallerScriptUrl =
 const flaredInstallerScriptUrl =
   'https://raw.githubusercontent.com/Rain-kl/OpenFlare/main/scripts/install-flared.sh';
 
+const agentWindowsInstallerScriptUrl =
+  'https://raw.githubusercontent.com/Rain-kl/OpenFlare/main/scripts/install-agent.ps1';
+
 export function getImageTag(version?: string): string {
   if (!version) {
     return 'latest';
@@ -155,6 +158,20 @@ export function buildEdgeDockerInstallCommand(
     `  -e OPENFLARE_SERVER_URL=${serverUrl} \\`,
     `  -e OPENFLARE_AGENT_TOKEN=${agentToken} \\`,
     `  ${image}`,
+  ].join('\n');
+}
+
+function quotePowerShell(value: string) {
+  return `'${value.replaceAll("'", "''")}'`;
+}
+
+export function buildEdgeWindowsInstallCommand(
+  serverUrl: string,
+  agentToken: string,
+) {
+  return [
+    `$s = (Invoke-WebRequest -UseBasicParsing ${quotePowerShell(agentWindowsInstallerScriptUrl)}).Content`,
+    `& ([scriptblock]::Create($s)) -ServerUrl ${quotePowerShell(serverUrl)} -AgentToken ${quotePowerShell(agentToken)}`,
   ].join('\n');
 }
 

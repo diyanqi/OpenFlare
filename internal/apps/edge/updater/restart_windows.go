@@ -22,7 +22,17 @@ if errorlevel 1 (
 )
 move /Y "%s" "%s" >nul 2>nul
 if errorlevel 1 exit /b 1
-start "" %s
+sc.exe query OpenFlareAgent >nul 2>nul
+if errorlevel 1 (
+  start "" %s
+) else (
+:startservice
+  sc.exe start OpenFlareAgent >nul 2>nul
+  if errorlevel 1 (
+    ping 127.0.0.1 -n 2 >nul
+    goto startservice
+  )
+)
 del /Q "%s" >nul 2>nul
 del /Q "%%~f0" >nul 2>nul
 `, execPath, backupPath, tmpPath, execPath, buildWindowsCommandLine(execPath, os.Args[1:]), backupPath)

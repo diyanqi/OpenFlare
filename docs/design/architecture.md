@@ -66,7 +66,7 @@ OpenResty (Agent, TLS/WAF)
 | 组件            | 职责                                                                   | 详细设计参考 |
 | --------------- | ---------------------------------------------------------------------- | ------------ |
 | **Server**      | 管理端 UI/API、控制面状态持久化、配置编译渲染、发布版本控制、Pages 部署包存储、访问日志入库与业务流量聚合、Uptime Kuma 监控同步与登录验证码防护 | [Agent 与发布模型](./agent-design.md) / [边缘可观测与业务流量统计](./observability-design.md) / [Uptime Kuma 监控同步设计](./kuma-design.md) / [登录验证码设计](./login-captcha.md) |
-| **Agent**       | 周期心跳与 WS 同步、静态资源包拉取与解压、OpenResty 配置写入/校验/重载与自愈；观测仅上报访问明细与主机/健康读数，不做业务预聚合 | [Agent 与发布模型](./agent-design.md) / [边缘可观测与业务流量统计](./observability-design.md) |
+| **Agent**       | 周期心跳与 WS 同步、静态资源包拉取与解压、OpenResty 配置写入/校验/重载与自愈；支持 Linux/macOS 前台进程与 Windows Service；观测仅上报访问明细与主机/健康读数，不做业务预聚合 | [Agent 与发布模型](./agent-design.md) / [Windows Server Agent](./windows-agent-design.md) / [边缘可观测与业务流量统计](./observability-design.md) |
 | **OpenResty**   | 接收真实流量，执行 WAF 过滤、PoW 防护、Basic Auth 认证与静态/反代服务 | [WAF 设计](./waf-design.md) / [Pages 设计](./pages-design.md) |
 | **Relay**       | 部署于边缘节点，管理 `frps` 守护进程生命周期，接受心跳派发的穿透中继配置 | [内网穿透设计](./tunnel-design.md) |
 | **OpenFlared**  | 部署于内网，管理 `frpc` 进程组，向多个 Relay 建立反向隧道，上报连接状态 | [内网穿透设计](./tunnel-design.md) |
@@ -90,6 +90,7 @@ OpenResty (Agent, TLS/WAF)
 * 启动后维持与控制面的周期性心跳，并通过可选的 WebSocket 接收实时的配置发布广播。
 * 负责拉取最新激活版本的配置文件及证书，写入本地目录，并通过 `openresty -t` 执行安全校验后平滑重载 (`reload`)。
 * 在本地处理 Pages 部署包的下载、SHA-256 校验与解压缩切换。
+* Windows Server 使用原生 `openflare-agent.exe` 和 PowerShell 安装器注册为 Windows Service；OpenResty 路径由 `agent.json` 显式配置。
 * *详细设计请参阅：[Agent 与发布模型设计](./agent-design.md)*
 
 ### 3. OpenResty (数据面)
@@ -148,7 +149,7 @@ Server 入库 ClickHouse
         +---> host∈Zone --> Zone「已提供数据」等（同一套语义）
         +---> node_id 过滤 --> 节点业务量
 
-主机 /proc 网卡与 CPU 等 --> Agent 读数快照 --> 宿主机资源趋势（与业务交付分开展示）
+主机 /proc 或 Windows 系统 API --> Agent 读数快照 --> 宿主机资源趋势（与业务交付分开展示）
 OpenResty 健康与连接数 --> 边缘健康（瞬时，不作 24h 业务总量）
 ```
 * **原则**：Agent 只上报事实，Server 解释事实；业务流量唯一真相为访问日志。`openresty_tx` 与「已提供数据」不得双轨并存。
@@ -197,4 +198,5 @@ OpenResty 健康与连接数 --> 边缘健康（瞬时，不作 24h 业务总量
    * Pages 托管开发：阅读 [Pages 静态托管设计](./pages-design.md)。
    * 监控同步开发：阅读 [Uptime Kuma 监控同步设计](./kuma-design.md)。
    * 看板/访问日志/节点指标开发：阅读 [观测数据传输模型](./observability-transport-model.md) 与 [边缘可观测与业务流量统计](./observability-design.md)。
-5. **[仓库结构](./index.md#仓库结构)**：明确各个物理目录分层职责，避免堆砌和重复开发。
+5. **[Windows Server Agent](./windows-agent-design.md)**：Windows Service、安装器和主机观测的专属约束。
+6. **[仓库结构](./index.md#仓库结构)**：明确各个物理目录分层职责，避免堆砌和重复开发。

@@ -20,6 +20,35 @@ OpenFlare Agent 运行在代理节点侧。它不会接收远程 shell 指令，
 
 ## 一键安装
 
+### Windows Server 原生安装 (推荐)
+
+Windows Server 不需要 Docker。请先安装 Windows 版 OpenResty，并确认 `openresty.exe` 位于 PATH；也可以通过 `-OpenRestyPath` 显式传入路径。以管理员身份打开 PowerShell 后运行：
+
+```powershell
+$s = (Invoke-WebRequest -UseBasicParsing 'https://raw.githubusercontent.com/Rain-kl/OpenFlare/main/scripts/install-agent.ps1').Content
+& ([scriptblock]::Create($s)) -ServerUrl 'http://your-server:3000' -AgentToken 'YOUR_AGENT_TOKEN'
+```
+
+首次自动注册改用 `-DiscoveryToken`。安装器会下载与 CPU 架构匹配的 `openflare-agent-windows-<arch>.exe`，校验 SHA-256，生成 `%ProgramFiles%\OpenFlare\Agent\agent.json`，并注册 `OpenFlareAgent` 自动启动服务。
+
+显式指定 OpenResty 路径：
+
+```powershell
+& ([scriptblock]::Create($s)) -ServerUrl 'http://your-server:3000' -DiscoveryToken 'YOUR_DISCOVERY_TOKEN' -OpenRestyPath 'C:\OpenResty\nginx.exe'
+```
+
+查看和卸载：
+
+```powershell
+Get-Service OpenFlareAgent
+$u = (Invoke-WebRequest -UseBasicParsing 'https://raw.githubusercontent.com/Rain-kl/OpenFlare/main/scripts/uninstall-agent.ps1').Content
+& ([scriptblock]::Create($u))
+```
+
+PowerShell 安装器只授予 `SYSTEM` 与本机 `Administrators` 组访问 `agent.json` 的权限；它不会安装 OpenResty，也不会向 Agent 传递远程命令。
+
+Windows 安装器参数：`-ServerUrl`（必填）、`-AgentToken` 或 `-DiscoveryToken`（二选一）、`-InstallDir`、`-OpenRestyPath`、`-Repo`、`-Version`、`-NoService` 和 `-SkipOpenRestyCheck`。重复执行会停止并重建 `OpenFlareAgent` 服务，同时保留已有的节点名称、路径和观测参数。
+
 ### 交互式安装 (推荐)
 
 如果在不传递任何参数的情况下运行安装脚本，脚本将进入交互模式。您将可以通过向导选择安装方式（本地运行 / Docker 容器运行），并配置 Server 地址与认证 Token（若选择 Docker 方式且本地没有 Docker，脚本还会询问并智能安装 Docker）：

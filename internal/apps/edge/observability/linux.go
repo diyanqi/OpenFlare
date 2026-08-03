@@ -1,3 +1,5 @@
+//go:build !windows
+
 // Package observability provides helpers that read Linux /proc and /sys metrics for system monitoring.
 package observability
 

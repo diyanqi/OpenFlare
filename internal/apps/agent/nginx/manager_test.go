@@ -355,6 +355,47 @@ func TestManagerRenderMainConfigMergesExistingWorkerInitializer(t *testing.T) {
 	}
 }
 
+func TestNormalizeWindowsOpenRestyConfigRemovesUnsupportedDirectives(t *testing.T) {
+	input := `user openflare;
+worker_rlimit_nofile 65535;
+events {
+    use epoll;
+    multi_accept on;
+}
+server {
+    listen 443 ssl;
+    listen 443 quic reuseport;
+    add_header Alt-Svc 'h3=":443"';
+}
+`
+	output := normalizeWindowsOpenRestyConfig(input)
+	for _, unsupported := range []string{"user openflare;", "worker_rlimit_nofile", "use epoll;", "multi_accept", "quic", "reuseport", "Alt-Svc"} {
+		if strings.Contains(output, unsupported) {
+			t.Fatalf("expected Windows config to remove %q, got:\n%s", unsupported, output)
+		}
+	}
+	if !strings.Contains(output, "listen 443 ssl;") {
+		t.Fatalf("expected normal TLS listener to remain, got:\n%s", output)
+	}
+}
+
+func TestReplaceNginxPathPlaceholderQuotesWindowsPaths(t *testing.T) {
+	input := `include __ROUTE__;
+root "__PAGES__/projects/1/current";
+ssl_certificate __CERT__/1.crt;
+`
+	output := replaceNginxPathPlaceholder(input, "__ROUTE__", `C:\Program Files\OpenFlare\route.conf`, true)
+	output = replaceNginxPathPlaceholder(output, "__PAGES__", `C:\Program Files\OpenFlare\pages`, true)
+	output = replaceNginxPathPlaceholder(output, "__CERT__", `C:\Program Files\OpenFlare\certs`, true)
+	want := `include "C:/Program Files/OpenFlare/route.conf";
+root "C:/Program Files/OpenFlare/pages/projects/1/current";
+ssl_certificate "C:/Program Files/OpenFlare/certs/1.crt";
+`
+	if output != want {
+		t.Fatalf("unexpected quoted Windows config paths:\nwant:\n%s\ngot:\n%s", want, output)
+	}
+}
+
 func TestManagerCheckHealthUsesStubStatusInsteadOfConfigTest(t *testing.T) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {

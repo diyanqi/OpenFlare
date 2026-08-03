@@ -19,6 +19,7 @@ import { type NodeItem, StatusService } from '@/lib/services/openflare';
 
 import {
   buildEdgeDockerInstallCommand,
+  buildEdgeWindowsInstallCommand,
   buildRelayDockerInstallCommand,
   buildRelayInstallCommand,
   buildTunnelDockerInstallCommand,
@@ -42,6 +43,7 @@ const variantMeta: Record<
     title: '边缘节点部署',
     description: '使用 Agent Token 将边缘节点接入控制端。',
     tokenLabel: 'Agent Token',
+    scriptLabel: '一键安装 (Windows Server)',
     dockerLabel: 'Docker 容器部署',
   },
   relay: {
@@ -85,6 +87,16 @@ export function InstallCommand({
   }, [serverUrl]);
 
   const normalizedServerUrl = getServerUrl(serverUrl);
+  const windowsCommand = useMemo(() => {
+    if (!normalizedServerUrl || !node.access_token || variant !== 'edge') {
+      return '';
+    }
+    return buildEdgeWindowsInstallCommand(
+      normalizedServerUrl,
+      node.access_token,
+    );
+  }, [normalizedServerUrl, node.access_token, variant]);
+
   const scriptCommand = useMemo(() => {
     if (!normalizedServerUrl || !node.access_token || variant === 'edge') {
       return '';
@@ -137,6 +149,19 @@ export function InstallCommand({
           <CardDescription>{meta.description}</CardDescription>
         </div>
         <div className='flex flex-wrap gap-2'>
+          {windowsCommand ? (
+            <Button
+              variant='secondary'
+              size='sm'
+              className='h-7 text-xs'
+              onClick={() =>
+                void handleCopy(windowsCommand, 'Windows 安装命令已复制')
+              }
+            >
+              <Copy className='size-3.5 mr-1' />
+              复制 Windows
+            </Button>
+          ) : null}
           {scriptCommand ? (
             <Button
               variant='secondary'
@@ -204,6 +229,14 @@ export function InstallCommand({
           </p>
         ) : (
           <>
+            {windowsCommand && meta.scriptLabel ? (
+              <div className='space-y-2'>
+                <p className='text-sm font-medium'>{meta.scriptLabel}</p>
+                <pre className='overflow-x-auto rounded-lg border bg-muted/40 p-3 text-xs whitespace-pre-wrap'>
+                  {windowsCommand}
+                </pre>
+              </div>
+            ) : null}
             {scriptCommand && meta.scriptLabel ? (
               <div className='space-y-2'>
                 <p className='text-sm font-medium'>{meta.scriptLabel}</p>

@@ -59,7 +59,7 @@ build-agent:
 	go build \
 		-ldflags "-s -w -X '$(MODULE)/internal/apps/agent/config.Version=$(VERSION)'" \
 		-o bin/openflare-agent \
-		cmd/agent/main.go
+		./cmd/agent
 
 build-relay:
 	@echo "==> Building relay version=$(VERSION)..."

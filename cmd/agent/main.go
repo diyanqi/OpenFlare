@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
-	"syscall"
 
 	"github.com/Rain-kl/Wavelet/internal/apps/agent/agent"
 	"github.com/Rain-kl/Wavelet/internal/apps/agent/config"
@@ -28,19 +27,29 @@ func main() {
 
 	configPath := flag.String("config", "./agent.json", "agent config path")
 	flag.Parse()
-
-	cfg, err := config.Load(*configPath)
-	if err != nil {
-		slog.Error("load agent config failed", "error", err)
+	if handled, err := runAsPlatformService(*configPath); handled {
+		if err != nil {
+			slog.Error("agent service exited with error", "error", err)
+			os.Exit(1)
+		}
+		return
+	}
+	if err := runAgentProcess(context.Background(), *configPath); err != nil && err != context.Canceled {
+		slog.Error("agent process exited with error", "error", err)
 		os.Exit(1)
+	}
+}
+
+func runAgentProcess(parent context.Context, configPath string) error {
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return err
 	}
 	if err = runtimeuser.EnsureProcessUser(); err != nil {
-		slog.Error("ensure runtime user failed", "error", err)
-		os.Exit(1)
+		return err
 	}
 	if err = runtimeuser.EnsurePathOwnership(cfg.DataDir, runtimeuser.DefaultDirPerm, runtimeuser.DefaultFilePerm); err != nil {
-		slog.Error("ensure data dir ownership failed", "error", err, "data_dir", cfg.DataDir)
-		os.Exit(1)
+		return err
 	}
 	cfg.ExtVersion = nginx.DetectVersion(
 		context.Background(),
@@ -100,8 +109,7 @@ func main() {
 		}),
 	}
 	if err = runtimeManager.EnsureLuaAssets(); err != nil {
-		slog.Error("ensure managed lua assets failed", "error", err)
-		os.Exit(1)
+		return err
 	}
 	syncService := syncservice.New(client, runtimeManager, stateStore)
 	syncService.SetPagesDir(cfg.PagesDir)
@@ -124,7 +132,8 @@ func main() {
 		WebSocketService: wsClient,
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(parent, os.Interrupt)
+	defer stop()
 	geoIPUpdater := newGeoIPUpdater(cfg)
 	if err = geoIPUpdater.EnsureInitialDatabases(ctx); err != nil {
 		slog.Warn("failed to prepare GeoIP databases before agent startup", "error", err)
@@ -133,12 +142,10 @@ func main() {
 	slog.Info("agent process started")
 
 	if err = runner.Run(ctx); err != nil && err != context.Canceled {
-		slog.Error("agent process exited with error", "error", err)
-		stop()
-		os.Exit(1)
+		return err
 	}
-	stop()
 	slog.Info("agent process stopped")
+	return nil
 }
 
 func newGeoIPUpdater(cfg *config.Config) *geoipupdate.Updater {
