@@ -1430,6 +1430,12 @@ func (m *Manager) renderMainConfig(content string) string {
 		rendered = replaceNginxPathPlaceholder(rendered, openrestyrender.AccessLogPlaceholder, accessLogPath, runtime.GOOS == "windows")
 		errorLogPath := filepath.Join(filepath.Dir(accessLogPath), "error.log")
 		rendered = replaceNginxPathPlaceholder(rendered, openrestyrender.ErrorLogPlaceholder, errorLogPath, runtime.GOOS == "windows")
+		if runtime.GOOS == "windows" {
+			rendered = normalizeWindowsOpenRestyLogPaths(rendered, accessLogPath)
+		}
+		if err := os.MkdirAll(filepath.Dir(accessLogPath), nginxDirPerm); err != nil {
+			slog.Warn("ensure openresty log directory failed", "path", filepath.Dir(accessLogPath), "error", err)
+		}
 	}
 	if pidPath := m.pidRuntimePath(); pidPath != "" {
 		slashPIDPath := filepath.ToSlash(pidPath)
@@ -1555,6 +1561,28 @@ func normalizeWindowsOpenRestyConfig(content string) string {
 		filtered = append(filtered, line)
 	}
 	return strings.Join(filtered, "")
+}
+
+func normalizeWindowsOpenRestyLogPaths(content, accessLogPath string) string {
+	accessLogPath = strings.TrimSpace(accessLogPath)
+	if accessLogPath == "" {
+		return content
+	}
+	errorLogPath := filepath.Join(filepath.Dir(accessLogPath), "error.log")
+	content = replaceWindowsRelativeLogPath(content, "access_log", "access.log", accessLogPath)
+	return replaceWindowsRelativeLogPath(content, "error_log", "error.log", errorLogPath)
+}
+
+func replaceWindowsRelativeLogPath(content, directive, fileName, targetPath string) string {
+	pattern := regexp.MustCompile(`(?im)(^[ \t]*` + regexp.QuoteMeta(directive) + `[ \t]+)"?(?:\.[\\/])?logs[\\/]` + regexp.QuoteMeta(fileName) + `"?([ \t;])`)
+	target := windowsNginxConfigPath(targetPath)
+	return pattern.ReplaceAllStringFunc(content, func(match string) string {
+		submatches := pattern.FindStringSubmatch(match)
+		if len(submatches) != 3 {
+			return match
+		}
+		return submatches[1] + target + submatches[2]
+	})
 }
 
 func normalizeNginxPath(content, path, placeholder string) string {

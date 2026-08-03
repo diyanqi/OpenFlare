@@ -396,6 +396,19 @@ ssl_certificate "C:/Program Files/OpenFlare/certs/1.crt";
 	}
 }
 
+func TestNormalizeWindowsOpenRestyLogPaths(t *testing.T) {
+	input := `error_log ./logs/error.log warn;
+access_log "logs/access.log" openflare_json;
+`
+	output := normalizeWindowsOpenRestyLogPaths(input, `C:\Program Files\OpenFlare\Agent\data\var\log\openflare\access.log`)
+	want := `error_log "C:/Program Files/OpenFlare/Agent/data/var/log/openflare/error.log" warn;
+access_log "C:/Program Files/OpenFlare/Agent/data/var/log/openflare/access.log" openflare_json;
+`
+	if output != want {
+		t.Fatalf("unexpected normalized Windows log paths:\nwant:\n%s\ngot:\n%s", want, output)
+	}
+}
+
 func TestManagerCheckHealthUsesStubStatusInsteadOfConfigTest(t *testing.T) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
