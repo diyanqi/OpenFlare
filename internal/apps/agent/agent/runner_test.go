@@ -657,3 +657,16 @@ func TestWebSocketBackoffSequence(t *testing.T) {
 		t.Fatalf("expected reset backoff to return 1s, got %s", got)
 	}
 }
+
+func TestWebSocketBackoffResetsOnlyAfterStableConnection(t *testing.T) {
+	connectedAt := time.Unix(100, 0)
+	if websocketConnectionWasStable(connectedAt, connectedAt.Add(websocketStableConnectionWindow-time.Nanosecond)) {
+		t.Fatal("expected short websocket connection not to reset backoff")
+	}
+	if !websocketConnectionWasStable(connectedAt, connectedAt.Add(websocketStableConnectionWindow)) {
+		t.Fatal("expected stable websocket connection to reset backoff")
+	}
+	if websocketConnectionWasStable(time.Time{}, connectedAt.Add(websocketStableConnectionWindow)) {
+		t.Fatal("expected missing connection start time not to reset backoff")
+	}
+}

@@ -48,6 +48,8 @@ type WebSocketService interface {
 
 const websocketBackoffDefaultDelay = 30 * time.Second
 
+const websocketStableConnectionWindow = 30 * time.Second
+
 // Runner coordinates the agent's heartbeat, configuration sync, and WebSocket upgrade lifecycle.
 type Runner struct {
 	Config           *config.Config
@@ -77,6 +79,7 @@ func (r *Runner) Run(ctx context.Context) error {
 	heartbeatTicker := time.NewTicker(r.Config.HeartbeatInterval.Duration())
 	defer heartbeatTicker.Stop()
 	var wsDone <-chan error
+	var wsConnectedAt time.Time
 	wsBackoff := newWebSocketBackoff()
 	nextWSAttempt := time.Now()
 	tryStartWebSocket := func() {
@@ -95,8 +98,8 @@ func (r *Runner) Run(ctx context.Context) error {
 			)
 			return
 		}
-		wsBackoff.Reset()
 		wsDone = done
+		wsConnectedAt = time.Now()
 		slog.Debug("agent switched to websocket mode", "url", r.websocketURL())
 	}
 	tryStartWebSocket()
@@ -107,10 +110,14 @@ func (r *Runner) Run(ctx context.Context) error {
 			slog.Info("agent runner shutting down", "error", ctx.Err())
 			return ctx.Err()
 		case wsErr := <-wsDone:
+			connectedFor := time.Since(wsConnectedAt)
+			if websocketConnectionWasStable(wsConnectedAt, time.Now()) {
+				wsBackoff.Reset()
+			}
 			wsDone = nil
 			delay := wsBackoff.Next()
 			nextWSAttempt = time.Now().Add(delay)
-			slog.Debug("agent ws disconnected; resuming http heartbeat", "retry_after", delay, "error", wsErr)
+			slog.Debug("agent ws disconnected; resuming http heartbeat", "retry_after", delay, "connected_for", connectedFor, "error", wsErr)
 			r.handleWSDisconnect(ctx, nodeID)
 		case <-heartbeatTicker.C:
 			if wsDone != nil {
@@ -119,6 +126,10 @@ func (r *Runner) Run(ctx context.Context) error {
 			r.handleHeartbeatTick(ctx, &nodeID, heartbeatTicker, tryStartWebSocket)
 		}
 	}
+}
+
+func websocketConnectionWasStable(connectedAt, disconnectedAt time.Time) bool {
+	return !connectedAt.IsZero() && disconnectedAt.Sub(connectedAt) >= websocketStableConnectionWindow
 }
 
 func (r *Runner) runStartupAuth(ctx context.Context, nodeID *string) {

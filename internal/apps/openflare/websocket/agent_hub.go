@@ -75,7 +75,7 @@ func ServeAgent(c *gin.Context, nodeID string, onStatus AgentStatusHandler) {
 	defaultAgentHub.register(client)
 	defer defaultAgentHub.unregister(client)
 
-	slog.Debug("agent ws connected", "node_id", nodeID, "remote", client.remoteAddr)
+	slog.Info("agent ws connected", "node_id", nodeID, "remote", client.remoteAddr)
 
 	go client.writePump()
 	client.readPump()
@@ -196,7 +196,7 @@ func (c *agentClient) readPump() {
 		_ = c.conn.SetReadDeadline(time.Now().Add(agentWSReadTimeout()))
 		_, data, err := c.conn.ReadMessage()
 		if err != nil {
-			slog.Debug("agent ws read closed", "node_id", c.nodeID, "error", err)
+			slog.Warn("agent ws read closed", "node_id", c.nodeID, "error", err)
 			return
 		}
 
@@ -243,7 +243,7 @@ func (c *agentClient) writePump() {
 		case message := <-c.send:
 			_ = c.conn.SetWriteDeadline(time.Now().Add(wsWriteDeadline))
 			if err := c.conn.WriteJSON(message); err != nil {
-				slog.Debug("agent ws write failed", "node_id", c.nodeID, "error", err)
+				slog.Warn("agent ws write failed", "node_id", c.nodeID, "error", err)
 				c.close()
 				return
 			}
